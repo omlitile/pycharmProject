@@ -8,13 +8,15 @@ import difflib
 import pandas as pd
 import env
 import os
-
+from langchain_core.runnables import RunnableSequence
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableLambda
+from langchain_core.prompts import ChatPromptTemplate
 
 # 初始化OpenAI模型
 def init_model():
     return ChatOpenAI(
         model="gpt-4-turbo",
-        base_url="https://api.gptsapi.net/v1",
         temperature=0.1,  # 严格遵循提示要求
         top_p=0.85,  # 保留高概率差异点
         max_tokens=500,  # 限制单次输出长度
@@ -57,17 +59,21 @@ DIFF_PROMPT_TEMPLATE = """作为专业文本分析师，请完成以下任务：
     "importance": "等级"
 }]"""
 
-
+diff_parser = StrOutputParser()
 # 创建差异检测链
 def create_diff_chain(llm):
-    prompt_template = PromptTemplate(
-        input_variables=["text_a", "text_b"],
-        template=DIFF_PROMPT_TEMPLATE
+    # prompt_template = PromptTemplate(
+    #     input_variables=["text_a", "text_b"],
+    #     template="比较以下两段文本的差异：{text_a} 和 {text_b}"
+    # )
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            ("system", "比较以下两段文本的差异"),
+            ("human", "文本A：{text_a}\n文本B：{text_b}")
+        ]
     )
-    return LLMChain(
-        llm=llm,
-        prompt=prompt_template,
-        output_parser=lambda x: pd.DataFrame(x["result"])
+    return RunnableSequence(
+        llm | prompt_template | RunnableLambda(lambda x: pd.DataFrame(x["result"]))
     )
 
 
@@ -88,10 +94,10 @@ def aggregate_diffs(all_diffs):
 # 主处理流程
 def compare_large_texts(file_a, file_b, chunk_size=1024):
     # 加载文本
-    loader = TextLoader(file_a)
-    text_a = loader.load()[0].page_content
-    loader = TextLoader(file_b)
-    text_b = loader.load()[0].page_content
+    loaderA = TextLoader(file_a, autodetect_encoding=False, encoding="utf-8")
+    text_a = loaderA.load()[0].page_content
+    loaderB = TextLoader(file_b, autodetect_encoding=False, encoding="utf-8")
+    text_b = loaderB.load()[0].page_content
 
     # 分块处理
     chunks_a = smart_chunking(text_a, chunk_size)
@@ -104,7 +110,9 @@ def compare_large_texts(file_a, file_b, chunk_size=1024):
     # 并行处理差异检测
     all_diffs = []
     for chunk_a, chunk_b in zip(chunks_a, chunks_b):
-        result = diff_chain.run(text_a=chunk_a, text_b=chunk_b)
+        input_data = {"text_a": chunk_a, "text_b": chunk_b}
+        print(input_data)
+        result = diff_chain.invoke(input_data)
         all_diffs.append(result)
 
     # 聚合结果
@@ -113,8 +121,9 @@ def compare_large_texts(file_a, file_b, chunk_size=1024):
 
 # 示例调用
 if __name__ == "__main__":
-    file_a = "version_a.txt"
-    file_b = "version_b.txt"
+    print(os.getenv("OPENAI_API_KEY"))
+    file_a = "demo1.txt"
+    file_b = "demo2.txt"
     report = compare_large_texts(file_a, file_b)
 
     # 保存报告
