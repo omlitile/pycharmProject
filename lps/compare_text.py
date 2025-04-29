@@ -22,7 +22,8 @@ def init_model():
         max_tokens=500,  # 限制单次输出长度
         frequency_penalty=0.8,  # 防止重复报告相同差异
         presence_penalty = 0.4,  # 避免遗漏新条款
-        api_key=os.getenv("OPENAI_API_KEY")
+        api_key=os.getenv("OPENAI_API_KEY"),
+        base_url=os.getenv("OPENAI_BASE_URL")
     )
 
 
@@ -37,7 +38,8 @@ def smart_chunking(text, chunk_size=512, overlap=100):
 
 
 # 差异检测Prompt模板
-DIFF_PROMPT_TEMPLATE = """作为专业文本分析师，请完成以下任务：
+DIFF_PROMPT_TEMPLATE = """
+作为专业文本分析师，请完成以下任务:
 1. 对比两段文本的差异（版本A vs 版本B）
 2. 识别以下差异类型：
    - 新增内容（标记为+）
@@ -64,17 +66,18 @@ diff_parser = StrOutputParser()
 def create_diff_chain(llm):
     # prompt_template = PromptTemplate(
     #     input_variables=["text_a", "text_b"],
-    #     template="比较以下两段文本的差异：{text_a} 和 {text_b}"
+    #     template=(
+    #         DIFF_PROMPT_TEMPLATE + "\n\n"
+    #         "文本A：{text_a}\n"
+    #         "文本B：{text_b}\n"
+    #     )
     # )
-    prompt_template = ChatPromptTemplate.from_messages(
-        [
-            ("system", "比较以下两段文本的差异"),
-            ("human", "文本A：{text_a}\n文本B：{text_b}")
-        ]
-    )
-    return RunnableSequence(
-        llm | prompt_template | RunnableLambda(lambda x: pd.DataFrame(x["result"]))
-    )
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", "比较两段文本差异"),
+        ("human", "文本A：{text_a}\n文本B：{text_b}")
+    ])
+    return llm | prompt_template | diff_parser
+
 
 
 # 差异聚合与可视化
@@ -105,14 +108,22 @@ def compare_large_texts(file_a, file_b, chunk_size=1024):
 
     # 初始化模型和链
     llm = init_model()
-    diff_chain = create_diff_chain(llm)
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", "比较两段文本差异"),
+        ("human", "文本A：{text_a}\n文本B：{text_b}")
+    ])
+    diff_chain = llm | prompt_template | diff_parser
 
     # 并行处理差异检测
     all_diffs = []
     for chunk_a, chunk_b in zip(chunks_a, chunks_b):
-        input_data = {"text_a": chunk_a, "text_b": chunk_b}
-        print(input_data)
+        input_data = {
+            "text_a": "旧版本需求文档内容",
+            "text_b": "新版本需求文档内容"
+        }
         result = diff_chain.invoke(input_data)
+        print(result)
+        # result = diff_chain.invoke({"text_a": chunk_a, "text_b": chunk_b})
         all_diffs.append(result)
 
     # 聚合结果
