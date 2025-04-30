@@ -33,8 +33,8 @@ prompt_template = ChatPromptTemplate.from_messages([
 ])
 
 # 读取文本
-file_a = "lps/demo1.txt"
-file_b = "lps/demo2.txt"
+file_a = "demo1.txt"
+file_b = "demo2.txt"
 loaderA = TextLoader(file_a, autodetect_encoding=False, encoding="utf-8")
 text_a = loaderA.load()[0].page_content
 loaderB = TextLoader(file_b, autodetect_encoding=False, encoding="utf-8")
@@ -44,7 +44,7 @@ input_data = {
     "text_b": text_b
 }
 diff_chain = prompt_template | llm | parser
-file = open("result.txt", "a",encoding="utf-8")
+file = open("../result.txt", "a", encoding="utf-8")
 
 for num in range(1, 11):
     print(num)
