@@ -18,7 +18,7 @@ tokenized_datasets = dataset.map(tokenize_function, batched=True)
 small_train_dataset = tokenized_datasets["train"].shuffle(seed=42).select(range(10))
 small_eval_dataset = tokenized_datasets["test"].shuffle(seed=42).select(range(10))
 ##指定微调模型
-model = AutoModelForSequenceClassification.from_pretrained("google-bert/bert-base-cased", num_labels=5)
+model = AutoModelForSequenceClassification.from_pretrained("Qwen/Qwen3-0.6B-Base", num_labels=5)
 
 
 ##设置超参数
